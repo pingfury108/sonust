@@ -92,6 +92,7 @@ pub fn router(state: AppState) -> Router {
     rest = r(rest, "/getStarred", get(star::get_starred_handler));
     rest = r(rest, "/getStarred2", get(star::get_starred2_handler));
     rest = r(rest, "/stream", get(media::stream));
+    rest = r(rest, "/download", get(media::stream)); // 与 stream 同语义（离线下载）
     rest = r(rest, "/getCoverArt", get(media::get_cover_art));
 
     Router::new()
