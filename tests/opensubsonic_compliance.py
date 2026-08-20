@@ -345,7 +345,7 @@ def main():
     print()
     print("已知未实现端点（不在本次检测范围，按计划排期）:")
     for ep in ["getPlaylists 写入族(createPlaylist/updatePlaylist/deletePlaylist)",
-               "scrobble 播放统计", "getLyrics/getLyricsBySongId",
+               "getLyrics/getLyricsBySongId 歌词",
                "getAlbumList/search2 等 v1 老接口", "download", "jukebox/podcast/shares"]:
         print(f"  - {ep}")
     print("=" * 60)
