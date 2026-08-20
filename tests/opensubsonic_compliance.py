@@ -403,9 +403,7 @@ def main():
     print(f"结果: {npass} PASS / {nfail} FAIL / {nskip} SKIP")
     print()
     print("已知未实现端点（不在本次检测范围，按计划排期）:")
-    for ep in ["getPlaylists 写入族(createPlaylist/updatePlaylist/deletePlaylist)",
-               "LRCLIB 在线歌词补全",
-               "getAlbumList/search2 等 v1 老接口", "download", "jukebox/podcast/shares"]:
+    for ep in ["getAlbumList/search2 等 v1 老接口", "download", "jukebox", "多用户管理"]:
         print(f"  - {ep}")
     print("=" * 60)
     sys.exit(1 if nfail else 0)
