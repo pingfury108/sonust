@@ -1,0 +1,28 @@
+[package]
+name = "sonust"
+version = "0.1.0"
+edition = "2021"
+description = "Minimal OpenSubsonic-compatible music streaming server"
+
+[dependencies]
+anyhow = "1"
+tokio = { version = "1", features = ["full"] }
+axum = "0.8"
+tower = { version = "0.5", features = ["util"] }
+tower-http = { version = "0.6", features = ["fs", "trace"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio-rustls", "sqlite"] }
+lofty = "0.22"
+walkdir = "2"
+notify = "8"
+image = { version = "0.25", default-features = false, features = ["jpeg", "png", "gif", "webp"] }
+clap = { version = "4", features = ["derive", "env"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+md-5 = "0.10"
+sha2 = "0.10"
+hex = "0.4"
+rand = "0.8"
+form_urlencoded = "1"
+dirs = "6"
