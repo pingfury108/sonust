@@ -53,6 +53,22 @@ CREATE TABLE IF NOT EXISTS plays (
 );
 CREATE INDEX IF NOT EXISTS idx_plays_track ON plays(track_id);
 CREATE INDEX IF NOT EXISTS idx_plays_time  ON plays(played_at);
+CREATE TABLE IF NOT EXISTS playlists (
+    id       INTEGER PRIMARY KEY,
+    name     TEXT NOT NULL,
+    comment  TEXT,
+    owner    TEXT,
+    public   INTEGER NOT NULL DEFAULT 0,
+    created  TEXT NOT NULL,
+    changed  TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS playlist_items (
+    id          INTEGER PRIMARY KEY,
+    playlist_id INTEGER NOT NULL REFERENCES playlists(id) ON DELETE CASCADE,
+    track_id    INTEGER NOT NULL,
+    position    INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_playlist_items_pl ON playlist_items(playlist_id, position);
 "#;
 
 pub async fn init(data_dir: &Path) -> Result<SqlitePool> {

@@ -63,7 +63,7 @@ pub async fn get_album_list2(
     let rows = match sqlx::query(&format!(
         "SELECT al.*, ar.name AS artist_name,
                 (SELECT COUNT(*) FROM tracks t WHERE t.album_id = al.id) AS song_count,
-                (SELECT COALESCE(SUM(t.duration), 0) FROM tracks t WHERE t.album_id = al.id) AS duration,
+                (SELECT COALESCE(SUM(t.duration), 0.0) FROM tracks t WHERE t.album_id = al.id) AS duration,
                 (SELECT s.created FROM starred s WHERE s.item_type = 'album' AND s.item_id = al.id) AS starred,
                 {ALBUM_EXTRA_SQL},
                 {ALBUM_PLAYS_SQL}
@@ -195,10 +195,6 @@ pub async fn get_artist_info2(_auth: SubsonicAuth) -> Response {
     ok(json!({ "artistInfo2": {} })).into_response()
 }
 
-pub async fn get_playlists(_auth: SubsonicAuth) -> Response {
-    ok(json!({ "playlists": { "playlist": [] } })).into_response()
-}
-
 pub async fn get_bookmarks(_auth: SubsonicAuth) -> Response {
     ok(json!({ "bookmarks": { "bookmark": [] } })).into_response()
 }
@@ -219,6 +215,36 @@ pub async fn get_play_queue(_auth: SubsonicAuth) -> Response {
 /// 播放队列保存暂无持久化，静默成功。
 pub async fn save_play_queue(_auth: SubsonicAuth) -> Response {
     ok(json!({})).into_response()
+}
+
+// 客户端会周期性探测但不计划实现的功能，返回协议合法的空结果。
+
+pub async fn get_podcasts(_auth: SubsonicAuth) -> Response {
+    ok(json!({ "podcasts": { "channel": [] } })).into_response()
+}
+
+pub async fn get_newest_podcasts(_auth: SubsonicAuth) -> Response {
+    ok(json!({ "newestPodcasts": { "channel": [] } })).into_response()
+}
+
+pub async fn get_internet_radio_stations(_auth: SubsonicAuth) -> Response {
+    ok(json!({ "internetRadioStations": { "internetRadioStation": [] } })).into_response()
+}
+
+pub async fn get_shares(_auth: SubsonicAuth) -> Response {
+    ok(json!({ "shares": { "share": [] } })).into_response()
+}
+
+pub async fn get_videos(_auth: SubsonicAuth) -> Response {
+    ok(json!({ "videos": { "video": [] } })).into_response()
+}
+
+pub async fn get_chat_messages(_auth: SubsonicAuth) -> Response {
+    ok(json!({ "chatMessages": { "chatMessage": [] } })).into_response()
+}
+
+pub async fn get_album_info2(_auth: SubsonicAuth) -> Response {
+    ok(json!({ "albumInfo2": {} })).into_response()
 }
 
 pub async fn search3(
@@ -257,7 +283,7 @@ pub async fn search3(
     let albums = sqlx::query(&format!(
         "SELECT al.*, ar.name AS artist_name,
                 (SELECT COUNT(*) FROM tracks t WHERE t.album_id = al.id) AS song_count,
-                (SELECT COALESCE(SUM(t.duration), 0) FROM tracks t WHERE t.album_id = al.id) AS duration,
+                (SELECT COALESCE(SUM(t.duration), 0.0) FROM tracks t WHERE t.album_id = al.id) AS duration,
                 (SELECT s.created FROM starred s WHERE s.item_type = 'album' AND s.item_id = al.id) AS starred,
                 {ALBUM_EXTRA_SQL}
          FROM albums al LEFT JOIN artists ar ON ar.id = al.artist_id

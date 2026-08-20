@@ -280,6 +280,46 @@ def main():
     expect_ok("getSimilarSongs2", c.get("getSimilarSongs2", {"id": song_id or "tr-1"})[2], "similarSongs2")
     expect_ok("getArtistInfo2", c.get("getArtistInfo2", {"id": artist_id or "ar-1"})[2], "artistInfo2")
 
+    for ep, key in [("getPodcasts", "podcasts"), ("getInternetRadioStations", "internetRadioStations"),
+                    ("getShares", "shares"), ("getVideos", "videos"), ("getAlbumInfo2", "albumInfo2")]:
+        expect_ok(f"{ep}(桩)", c.get(ep)[2], key)
+
+    print("=" * 60)
+    print("5.5 歌单 CRUD")
+    print("=" * 60)
+
+    if song_id:
+        pl_id = None
+        p = Client.payload(c.get("createPlaylist", {"name": "compliance-test", "songId": song_id})[2])
+        pl = p.get("playlist", {})
+        if pl.get("id") and len(pl.get("entry", [])) == 1:
+            pl_id = pl["id"]
+            report("createPlaylist", PASS, pl_id)
+        else:
+            report("createPlaylist", FAIL, str(pl)[:100])
+
+        if pl_id:
+            p = Client.payload(c.get("getPlaylist", {"id": pl_id})[2])
+            report("getPlaylist 条目正确",
+                   PASS if p.get("playlist", {}).get("entry", [{}])[0].get("id") == song_id else FAIL)
+
+            c.get("updatePlaylist", {"playlistId": pl_id, "songIndexToRemove": 0})
+            p = Client.payload(c.get("getPlaylist", {"id": pl_id})[2])
+            ok_rm = len(p.get("playlist", {}).get("entry", [])) == 0
+            c.get("updatePlaylist", {"playlistId": pl_id, "songIdToAdd": song_id})
+            p = Client.payload(c.get("getPlaylist", {"id": pl_id})[2])
+            ok_add = len(p.get("playlist", {}).get("entry", [])) == 1
+            report("updatePlaylist 删歌/加歌", PASS if ok_rm and ok_add else FAIL,
+                   f"删后={ok_rm} 加后={ok_add}")
+
+            c.get("deletePlaylist", {"id": pl_id})
+            p = Client.payload(c.get("getPlaylist", {"id": pl_id})[2])
+            report("deletePlaylist", PASS if p.get("status") == "failed" else FAIL)
+        else:
+            report("getPlaylist/updatePlaylist/deletePlaylist", SKIP, "创建失败")
+    else:
+        report("歌单系列", SKIP, "无曲目")
+
     if song_id:
         expect_ok("scrobble", c.get("scrobble", {"id": song_id, "submission": "true"})[2])
         p = Client.payload(c.get("getAlbumList2", {"type": "frequent", "size": 5})[2])

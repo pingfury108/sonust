@@ -86,6 +86,47 @@ fn from_plain_text(text: &str) -> Lyrics {
     }
 }
 
+/// 文本（LRC 或纯文本）→ Lyrics。
+pub fn from_text(text: &str) -> Lyrics {
+    let parsed = parse_lrc(text);
+    if parsed.synced {
+        parsed
+    } else {
+        from_plain_text(text)
+    }
+}
+
+/// 查询 LRCLIB 在线歌词库（curl 子进程，避免引入 TLS 依赖破坏 musl 静态编译）。
+/// 返回 syncedLyrics 或 plainLyrics 原文。
+pub async fn fetch_lrclib(artist: &str, title: &str, album: &str, duration_secs: i64) -> Option<String> {
+    let enc = |s: &str| form_urlencoded::byte_serialize(s.as_bytes()).collect::<String>();
+    let url = format!(
+        "https://lrclib.net/api/get?artist_name={}&track_name={}&album_name={}&duration={}",
+        enc(artist),
+        enc(title),
+        enc(album),
+        duration_secs
+    );
+    let out = tokio::time::timeout(
+        std::time::Duration::from_secs(8),
+        tokio::process::Command::new("curl")
+            .args(["-sS", "--max-time", "5", &url])
+            .output(),
+    )
+    .await
+    .ok()?
+    .ok()?;
+    if !out.status.success() {
+        return None;
+    }
+    let v: serde_json::Value = serde_json::from_slice(&out.stdout).ok()?;
+    v.get("syncedLyrics")
+        .or_else(|| v.get("plainLyrics"))?
+        .as_str()
+        .map(String::from)
+        .filter(|s| !s.trim().is_empty())
+}
+
 /// 获取曲目歌词：内嵌标签优先，同目录同名 .lrc 兜底。
 pub async fn for_track(track_path: &Path) -> Option<Lyrics> {
     let path = track_path.to_path_buf();
@@ -95,8 +136,7 @@ pub async fn for_track(track_path: &Path) -> Option<Lyrics> {
             if let Some(tag) = tagged.primary_tag().or_else(|| tagged.first_tag()) {
                 if let Some(text) = tag.get_string(&lofty::tag::ItemKey::Lyrics) {
                     if !text.trim().is_empty() {
-                        let parsed = parse_lrc(text);
-                        return Some(if parsed.synced { parsed } else { from_plain_text(text) });
+                        return Some(from_text(text));
                     }
                 }
             }

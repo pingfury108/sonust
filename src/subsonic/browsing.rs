@@ -227,7 +227,7 @@ pub async fn get_artist(
     let albums = sqlx::query(&format!(
         "SELECT al.*, ar.name AS artist_name,
                 (SELECT COUNT(*) FROM tracks t WHERE t.album_id = al.id) AS song_count,
-                (SELECT COALESCE(SUM(t.duration), 0) FROM tracks t WHERE t.album_id = al.id) AS duration,
+                (SELECT COALESCE(SUM(t.duration), 0.0) FROM tracks t WHERE t.album_id = al.id) AS duration,
                 (SELECT s.created FROM starred s WHERE s.item_type = 'album' AND s.item_id = al.id) AS starred,
                 {ALBUM_EXTRA_SQL}
          FROM albums al LEFT JOIN artists ar ON ar.id = al.artist_id

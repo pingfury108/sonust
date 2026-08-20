@@ -3,6 +3,7 @@ pub mod directory;
 pub mod lists;
 pub mod lyrics;
 pub mod media;
+pub mod playlist;
 pub mod response;
 pub mod star;
 pub mod system;
@@ -65,7 +66,11 @@ pub fn router(state: AppState) -> Router {
     rest = r(rest, "/getTopSongs", get(lists::get_top_songs));
     rest = r(rest, "/getSimilarSongs2", get(lists::get_similar_songs2));
     rest = r(rest, "/getArtistInfo2", get(lists::get_artist_info2));
-    rest = r(rest, "/getPlaylists", get(lists::get_playlists));
+    rest = r(rest, "/getPlaylists", get(playlist::get_playlists));
+    rest = r(rest, "/getPlaylist", get(playlist::get_playlist));
+    rest = r(rest, "/createPlaylist", get(playlist::create_playlist));
+    rest = r(rest, "/updatePlaylist", get(playlist::update_playlist));
+    rest = r(rest, "/deletePlaylist", get(playlist::delete_playlist));
     rest = r(rest, "/getBookmarks", get(lists::get_bookmarks));
     rest = r(rest, "/createBookmark", get(lists::create_bookmark));
     rest = r(rest, "/deleteBookmark", get(lists::delete_bookmark));
@@ -74,6 +79,14 @@ pub fn router(state: AppState) -> Router {
     rest = r(rest, "/scrobble", get(lists::scrobble));
     rest = r(rest, "/getLyrics", get(lyrics::get_lyrics));
     rest = r(rest, "/getLyricsBySongId", get(lyrics::get_lyrics_by_song_id));
+    // 探测类端点空结果桩
+    rest = r(rest, "/getPodcasts", get(lists::get_podcasts));
+    rest = r(rest, "/getNewestPodcasts", get(lists::get_newest_podcasts));
+    rest = r(rest, "/getInternetRadioStations", get(lists::get_internet_radio_stations));
+    rest = r(rest, "/getShares", get(lists::get_shares));
+    rest = r(rest, "/getVideos", get(lists::get_videos));
+    rest = r(rest, "/getChatMessages", get(lists::get_chat_messages));
+    rest = r(rest, "/getAlbumInfo2", get(lists::get_album_info2));
     rest = r(rest, "/star", get(star::star));
     rest = r(rest, "/unstar", get(star::unstar));
     rest = r(rest, "/getStarred", get(star::get_starred_handler));

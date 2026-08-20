@@ -77,7 +77,7 @@ pub async fn get_starred(st: AppState, key: &str) -> Response {
     let albums = sqlx::query(&format!(
         "SELECT al.*, ar.name AS artist_name, s.created AS starred,
                 (SELECT COUNT(*) FROM tracks t WHERE t.album_id = al.id) AS song_count,
-                (SELECT COALESCE(SUM(t.duration), 0) FROM tracks t WHERE t.album_id = al.id) AS duration,
+                (SELECT COALESCE(SUM(t.duration), 0.0) FROM tracks t WHERE t.album_id = al.id) AS duration,
                 {ALBUM_EXTRA_SQL}
          FROM starred s
          JOIN albums al ON al.id = s.item_id
