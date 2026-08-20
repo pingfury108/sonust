@@ -213,6 +213,19 @@ pub async fn scan_all(pool: &SqlitePool, music_dirs: &[PathBuf]) -> Result<ScanS
             .map(|base| base.join(&path).exists())
             .unwrap_or(false);
         if !exists {
+            // 先清依赖行（plays 有 FK，其余是逻辑清理），再删曲目
+            sqlx::query("DELETE FROM plays WHERE track_id = ?")
+                .bind(id)
+                .execute(pool)
+                .await?;
+            sqlx::query("DELETE FROM playlist_items WHERE track_id = ?")
+                .bind(id)
+                .execute(pool)
+                .await?;
+            sqlx::query("DELETE FROM starred WHERE item_type = 'track' AND item_id = ?")
+                .bind(id)
+                .execute(pool)
+                .await?;
             sqlx::query("DELETE FROM tracks WHERE id = ?")
                 .bind(id)
                 .execute(pool)

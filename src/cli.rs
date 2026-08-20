@@ -54,6 +54,12 @@ enum Command {
     Serve,
     /// 执行一次扫描后退出
     Scan,
+    /// 重复歌曲检测报告（A），可选隔离执行（C）
+    Dupes {
+        /// 非保留副本移动到该目录（不删除，留后悔药）
+        #[arg(long)]
+        quarantine: Option<std::path::PathBuf>,
+    },
 }
 
 pub async fn main() -> Result<()> {
@@ -94,6 +100,22 @@ pub async fn main() -> Result<()> {
             let pool = crate::db::init(&cfg.data_dir).await?;
             let stats = crate::scanner::scan_all(&pool, &cfg.music_dirs).await?;
             println!("scan finished: {stats:?}");
+            Ok(())
+        }
+        Command::Dupes { quarantine } => {
+            let pool = crate::db::init(&cfg.data_dir).await?;
+            let groups = crate::dupes::find_groups(&pool, &cfg.music_dirs).await?;
+            if groups.is_empty() {
+                println!("未发现重复歌曲");
+                return Ok(());
+            }
+            crate::dupes::print_report(&groups);
+            if let Some(dir) = quarantine {
+                let (n, bytes) = crate::dupes::quarantine(&groups, &cfg.music_dirs, &dir).await?;
+                println!("已移动 {n} 个文件到 {}，释放约 {} MB", dir.display(), bytes / 1048576);
+            } else {
+                println!("\n报告模式未改动任何文件；加 --quarantine <目录> 执行隔离");
+            }
             Ok(())
         }
     }

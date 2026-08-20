@@ -3,6 +3,7 @@ pub mod cli;
 pub mod config;
 pub mod cover;
 pub mod db;
+pub mod dupes;
 pub mod lyrics;
 pub mod scanner;
 pub mod subsonic;
