@@ -330,7 +330,26 @@ def main():
         expect_failed("getCoverArt 不存在 id -> code 70", body, 70)
 
     print("=" * 60)
-    print("7. 其他")
+    print("7. 歌词")
+    print("=" * 60)
+
+    if song_id:
+        p = expect_ok("getLyricsBySongId", c.get("getLyricsBySongId", {"id": song_id})[2], "lyricsList")
+        if p:
+            sl = p["lyricsList"].get("structuredLyrics", [])
+            if sl:
+                lines = sl[0].get("line", [])
+                has_ts = any("start" in l for l in lines)
+                report("结构化歌词内容", PASS if lines else FAIL,
+                       f"{len(lines)} 行, synced={sl[0].get('synced')}, 有时间轴={has_ts}")
+            else:
+                report("结构化歌词内容", SKIP, "该曲目无歌词")
+        expect_ok("getLyrics", c.get("getLyrics", {"title": "", "artist": ""})[2], "lyrics")
+    else:
+        report("歌词系列", SKIP, "无曲目")
+
+    print("=" * 60)
+    print("8. 其他")
     print("=" * 60)
 
     _, _, body = c.get("nonExistentEndpoint")
@@ -345,7 +364,7 @@ def main():
     print()
     print("已知未实现端点（不在本次检测范围，按计划排期）:")
     for ep in ["getPlaylists 写入族(createPlaylist/updatePlaylist/deletePlaylist)",
-               "getLyrics/getLyricsBySongId 歌词",
+               "LRCLIB 在线歌词补全",
                "getAlbumList/search2 等 v1 老接口", "download", "jukebox/podcast/shares"]:
         print(f"  - {ep}")
     print("=" * 60)

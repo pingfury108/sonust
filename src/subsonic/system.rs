@@ -18,11 +18,13 @@ pub async fn get_license(_auth: SubsonicAuth) -> Json<Value> {
     }))
 }
 
-/// 声明支持的 OpenSubsonic 扩展（当前无扩展，仅表明兼容身份）。
+/// 声明支持的 OpenSubsonic 扩展。
 pub async fn get_extensions(_auth: SubsonicAuth) -> Json<Value> {
     ok(json!({
         "openSubsonicExtensions": {
-            "openSubsonicExtension": []
+            "openSubsonicExtension": [
+                { "name": "songLyrics", "versions": [1] }
+            ]
         }
     }))
 }

@@ -1,6 +1,7 @@
 pub mod browsing;
 pub mod directory;
 pub mod lists;
+pub mod lyrics;
 pub mod media;
 pub mod response;
 pub mod star;
@@ -71,6 +72,8 @@ pub fn router(state: AppState) -> Router {
     rest = r(rest, "/getPlayQueue", get(lists::get_play_queue));
     rest = r(rest, "/savePlayQueue", get(lists::save_play_queue));
     rest = r(rest, "/scrobble", get(lists::scrobble));
+    rest = r(rest, "/getLyrics", get(lyrics::get_lyrics));
+    rest = r(rest, "/getLyricsBySongId", get(lyrics::get_lyrics_by_song_id));
     rest = r(rest, "/star", get(star::star));
     rest = r(rest, "/unstar", get(star::unstar));
     rest = r(rest, "/getStarred", get(star::get_starred_handler));
