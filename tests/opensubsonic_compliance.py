@@ -280,6 +280,17 @@ def main():
     expect_ok("getSimilarSongs2", c.get("getSimilarSongs2", {"id": song_id or "tr-1"})[2], "similarSongs2")
     expect_ok("getArtistInfo2", c.get("getArtistInfo2", {"id": artist_id or "ar-1"})[2], "artistInfo2")
 
+    if song_id:
+        expect_ok("scrobble", c.get("scrobble", {"id": song_id, "submission": "true"})[2])
+        p = Client.payload(c.get("getAlbumList2", {"type": "frequent", "size": 5})[2])
+        albums = p.get("albumList2", {}).get("album", [])
+        report("frequent 有真实播放统计", PASS if albums and albums[0].get("playCount", 0) > 0 else FAIL,
+               f"{len(albums)} 张专辑")
+        expect_ok("scrobble submission=false(正在播放)",
+                  c.get("scrobble", {"id": song_id, "submission": "false"})[2])
+    else:
+        report("scrobble", SKIP, "无曲目")
+
     print("=" * 60)
     print("6. 流式传输")
     print("=" * 60)

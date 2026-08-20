@@ -70,6 +70,7 @@ pub fn router(state: AppState) -> Router {
     rest = r(rest, "/deleteBookmark", get(lists::delete_bookmark));
     rest = r(rest, "/getPlayQueue", get(lists::get_play_queue));
     rest = r(rest, "/savePlayQueue", get(lists::save_play_queue));
+    rest = r(rest, "/scrobble", get(lists::scrobble));
     rest = r(rest, "/star", get(star::star));
     rest = r(rest, "/unstar", get(star::unstar));
     rest = r(rest, "/getStarred", get(star::get_starred_handler));

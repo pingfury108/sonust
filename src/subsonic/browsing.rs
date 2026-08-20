@@ -18,6 +18,8 @@ SELECT t.id, t.title, t.track_no, t.year, t.genre, t.duration, t.format, t.size,
        t.has_cover, t.album_id, t.artist_id,
        al.name AS album_name, ar.name AS artist_name,
        strftime('%Y-%m-%dT%H:%M:%SZ', t.mtime, 'unixepoch') AS created,
+       (SELECT COUNT(*) FROM plays p WHERE p.track_id = t.id) AS play_count,
+       (SELECT MAX(p.played_at) FROM plays p WHERE p.track_id = t.id) AS played,
        (SELECT s.created FROM starred s WHERE s.item_type = 'track' AND s.item_id = t.id) AS starred
 FROM tracks t
 LEFT JOIN albums al ON al.id = t.album_id
@@ -65,6 +67,12 @@ pub fn song_json(row: &sqlx::sqlite::SqliteRow) -> Value {
     if let Ok(Some(starred)) = row.try_get::<Option<String>, _>("starred") {
         m.insert("starred".into(), json!(starred));
     }
+    if let Ok(pc) = row.try_get::<i64, _>("play_count") {
+        m.insert("playCount".into(), json!(pc));
+    }
+    if let Ok(Some(played)) = row.try_get::<Option<String>, _>("played") {
+        m.insert("played".into(), json!(played));
+    }
     song
 }
 
@@ -85,6 +93,11 @@ pub fn content_type(suffix: &str) -> &'static str {
 pub const ALBUM_EXTRA_SQL: &str = "
     (SELECT strftime('%Y-%m-%dT%H:%M:%SZ', MIN(t.mtime), 'unixepoch') FROM tracks t WHERE t.album_id = al.id) AS created,
     (SELECT COUNT(*) FROM tracks t WHERE t.album_id = al.id AND t.has_cover = 1) AS cover_count";
+
+/// 专辑播放统计子查询片段（frequent/recent 排序用）。
+pub const ALBUM_PLAYS_SQL: &str = "
+    (SELECT COUNT(*) FROM plays p JOIN tracks t ON t.id = p.track_id WHERE t.album_id = al.id) AS album_plays,
+    (SELECT MAX(p.played_at) FROM plays p JOIN tracks t ON t.id = p.track_id WHERE t.album_id = al.id) AS last_played";
 
 /// Subsonic AlbumID3 JSON。
 pub fn album_json(row: &sqlx::sqlite::SqliteRow, song_count: i64, duration: i64) -> Value {
@@ -114,6 +127,13 @@ pub fn album_json(row: &sqlx::sqlite::SqliteRow, song_count: i64, duration: i64)
     }
     if let Ok(Some(starred)) = row.try_get::<Option<String>, _>("starred") {
         album.as_object_mut().unwrap().insert("starred".into(), json!(starred));
+    }
+    if let Ok(pc) = row.try_get::<i64, _>("album_plays") {
+        let m = album.as_object_mut().unwrap();
+        m.insert("playCount".into(), json!(pc));
+        if let Ok(Some(played)) = row.try_get::<Option<String>, _>("last_played") {
+            m.insert("played".into(), json!(played));
+        }
     }
     album
 }

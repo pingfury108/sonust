@@ -1,14 +1,14 @@
 use std::collections::HashMap;
 
 use axum::{
-    extract::{Query, State},
+    extract::{Query, RawQuery, State},
     response::{IntoResponse, Response},
 };
 use serde_json::{json, Value};
 use sqlx::Row;
 
 use crate::auth::SubsonicAuth;
-use crate::subsonic::browsing::{album_json, song_json, ALBUM_EXTRA_SQL, SONG_SQL};
+use crate::subsonic::browsing::{album_json, song_json, ALBUM_EXTRA_SQL, ALBUM_PLAYS_SQL, SONG_SQL};
 use crate::subsonic::response::{error, ok};
 use crate::AppState;
 
@@ -54,7 +54,9 @@ pub async fn get_album_list2(
         "alphabeticalByName" => ("al.name COLLATE NOCASE", ""),
         "alphabeticalByArtist" => ("ar.name COLLATE NOCASE, al.name COLLATE NOCASE", ""),
         "starred" => ("starred DESC", "WHERE starred IS NOT NULL"),
-        "recent" | "frequent" | "highest" => ("al.id DESC", ""), // MVP：无播放统计，退化为最新
+        "frequent" => ("album_plays DESC", "WHERE album_plays > 0"),
+        "recent" => ("last_played DESC", "WHERE last_played IS NOT NULL"),
+        "highest" => ("al.id DESC", ""), // 无评分系统，退化为最新
         _ => ("RANDOM()", ""), // random 及未知类型
     };
 
@@ -63,7 +65,8 @@ pub async fn get_album_list2(
                 (SELECT COUNT(*) FROM tracks t WHERE t.album_id = al.id) AS song_count,
                 (SELECT COALESCE(SUM(t.duration), 0) FROM tracks t WHERE t.album_id = al.id) AS duration,
                 (SELECT s.created FROM starred s WHERE s.item_type = 'album' AND s.item_id = al.id) AS starred,
-                {ALBUM_EXTRA_SQL}
+                {ALBUM_EXTRA_SQL},
+                {ALBUM_PLAYS_SQL}
          FROM albums al LEFT JOIN artists ar ON ar.id = al.artist_id
          {cond} ORDER BY {order} LIMIT ? OFFSET ?"
     ))
@@ -104,6 +107,50 @@ pub async fn get_random_songs(
 
     let songs: Vec<Value> = rows.iter().map(song_json).collect();
     ok(json!({ "randomSongs": { "song": songs } })).into_response()
+}
+
+/// scrobble：上报播放记录。submission=false 是"正在播放"通知，不落库。
+/// id/time 均可重复（批量上报），按下标配对。
+pub async fn scrobble(
+    State(st): State<AppState>,
+    _auth: SubsonicAuth,
+    RawQuery(raw): RawQuery,
+) -> Response {
+    let q = crate::subsonic::star::parse_multi(raw.as_deref().unwrap_or(""));
+    let submission = q
+        .get("submission")
+        .and_then(|v| v.first())
+        .map(|s| s == "true")
+        .unwrap_or(true);
+    if !submission {
+        return ok(json!({})).into_response();
+    }
+
+    let empty = Vec::new();
+    let ids = q.get("id").unwrap_or(&empty);
+    let times = q.get("time").unwrap_or(&empty);
+    for (i, raw_id) in ids.iter().enumerate() {
+        let Some(tid) = crate::subsonic::parse_track_id(raw_id) else {
+            return error(10, &format!("invalid id: {raw_id}"));
+        };
+        let time_ms: Option<i64> = times
+            .get(i)
+            .or_else(|| times.first())
+            .and_then(|s| s.parse().ok());
+        let res = sqlx::query(
+            "INSERT INTO plays(track_id, played_at) VALUES(?,
+                COALESCE(strftime('%Y-%m-%dT%H:%M:%fZ', ? / 1000, 'unixepoch'),
+                         strftime('%Y-%m-%dT%H:%M:%fZ', 'now')))",
+        )
+        .bind(tid)
+        .bind(time_ms)
+        .execute(&st.pool)
+        .await;
+        if let Err(e) = res {
+            return error(0, &e.to_string());
+        }
+    }
+    ok(json!({})).into_response()
 }
 
 pub async fn get_songs_by_genre(

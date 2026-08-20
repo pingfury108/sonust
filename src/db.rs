@@ -46,6 +46,13 @@ CREATE TABLE IF NOT EXISTS starred (
     created   TEXT NOT NULL,
     PRIMARY KEY(item_type, item_id)
 );
+CREATE TABLE IF NOT EXISTS plays (
+    id         INTEGER PRIMARY KEY,
+    track_id   INTEGER NOT NULL REFERENCES tracks(id),
+    played_at  TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_plays_track ON plays(track_id);
+CREATE INDEX IF NOT EXISTS idx_plays_time  ON plays(played_at);
 "#;
 
 pub async fn init(data_dir: &Path) -> Result<SqlitePool> {

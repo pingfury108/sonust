@@ -14,7 +14,7 @@ use crate::subsonic::{artist_id, parse_album_id, parse_artist_id, parse_track_id
 use crate::AppState;
 
 /// 手动解析重复参数（id=1&id=2）。
-fn parse_multi(raw: &str) -> HashMap<String, Vec<String>> {
+pub(crate) fn parse_multi(raw: &str) -> HashMap<String, Vec<String>> {
     let mut map: HashMap<String, Vec<String>> = HashMap::new();
     for (k, v) in form_urlencoded::parse(raw.as_bytes()) {
         map.entry(k.into_owned()).or_default().push(v.into_owned());
