@@ -50,14 +50,28 @@ pub async fn get_album_list2(
     let list_type = q.get("type").map(String::as_str).unwrap_or("random");
 
     let (order, cond) = match list_type {
-        "newest" => ("al.id DESC", ""),
-        "alphabeticalByName" => ("al.name COLLATE NOCASE", ""),
-        "alphabeticalByArtist" => ("ar.name COLLATE NOCASE, al.name COLLATE NOCASE", ""),
-        "starred" => ("starred DESC", "WHERE starred IS NOT NULL"),
-        "frequent" => ("album_plays DESC", "WHERE album_plays > 0"),
-        "recent" => ("last_played DESC", "WHERE last_played IS NOT NULL"),
-        "highest" => ("al.id DESC", ""), // 无评分系统，退化为最新
-        _ => ("RANDOM()", ""), // random 及未知类型
+        "newest" => ("al.id DESC".to_string(), String::new()),
+        "alphabeticalByName" => ("al.name COLLATE NOCASE".to_string(), String::new()),
+        "alphabeticalByArtist" => {
+            ("ar.name COLLATE NOCASE, al.name COLLATE NOCASE".to_string(), String::new())
+        }
+        "starred" => ("starred DESC".to_string(), "WHERE starred IS NOT NULL".to_string()),
+        "frequent" => ("album_plays DESC".to_string(), "WHERE album_plays > 0".to_string()),
+        "recent" => ("last_played DESC".to_string(), "WHERE last_played IS NOT NULL".to_string()),
+        "highest" => ("al.id DESC".to_string(), String::new()), // 无评分系统，退化为最新
+        // 年份区间过滤
+        "byYear" => {
+            let from = i64_param(&q, "fromYear", 1900);
+            let to = i64_param(&q, "toYear", 2100);
+            let (lo, hi) = if from <= to { (from, to) } else { (to, from) };
+            let year_cond = if lo == 1900 && hi == 2100 {
+                String::new()
+            } else {
+                format!("WHERE al.year BETWEEN {lo} AND {hi}")
+            };
+            ("al.id DESC".to_string(), year_cond)
+        }
+        _ => ("RANDOM()".to_string(), String::new()), // random 及未知类型
     };
 
     let rows = match sqlx::query(&format!(
@@ -189,6 +203,11 @@ pub async fn get_top_songs(_auth: SubsonicAuth) -> Response {
 
 pub async fn get_similar_songs2(_auth: SubsonicAuth) -> Response {
     ok(json!({ "similarSongs2": { "song": [] } })).into_response()
+}
+
+/// v1 版（Tempus 也调用），响应键为 similarSongs。
+pub async fn get_similar_songs(_auth: SubsonicAuth) -> Response {
+    ok(json!({ "similarSongs": { "song": [] } })).into_response()
 }
 
 pub async fn get_artist_info2(_auth: SubsonicAuth) -> Response {

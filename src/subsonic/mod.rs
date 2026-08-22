@@ -68,6 +68,7 @@ pub fn router(state: AppState) -> Router {
     // Symfonium 同步会探测的端点，先返回空结果避免 unknown endpoint
     rest = r(rest, "/getTopSongs", get(lists::get_top_songs));
     rest = r(rest, "/getSimilarSongs2", get(lists::get_similar_songs2));
+    rest = r(rest, "/getSimilarSongs", get(lists::get_similar_songs));
     rest = r(rest, "/getArtistInfo2", get(lists::get_artist_info2));
     rest = r(rest, "/getPlaylists", get(playlist::get_playlists));
     rest = r(rest, "/getPlaylist", get(playlist::get_playlist));

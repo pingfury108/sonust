@@ -8,7 +8,6 @@ pub mod lyrics;
 pub mod scanner;
 pub mod subsonic;
 
-use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 
 use anyhow::Result;
@@ -22,7 +21,6 @@ pub struct AppState {
     pub pool: SqlitePool,
     pub cfg: Arc<Config>,
     pub api_key_hash: String,
-    pub scanning: Arc<AtomicBool>,
 }
 
 pub async fn run(cfg: Config) -> Result<()> {
@@ -40,7 +38,6 @@ pub async fn run(cfg: Config) -> Result<()> {
         pool: pool.clone(),
         cfg: Arc::new(cfg.clone()),
         api_key_hash,
-        scanning: Arc::new(AtomicBool::new(false)),
     };
 
     // 后台增量扫描

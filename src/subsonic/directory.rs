@@ -103,6 +103,64 @@ async fn child_songs(st: &AppState, folder: i64, prefix: &str) -> Result<Vec<Val
     Ok(rows.iter().map(song_json).collect())
 }
 
+/// 虚拟目录 ID（扁平库按艺术家/专辑虚拟分组）：
+///   dirv-ar-{artist_id}  艺术家虚拟目录
+///   dirv-al-{album_id}   专辑虚拟目录
+fn dirv_artist_id(aid: i64) -> String {
+    format!("dirv-ar-{aid}")
+}
+fn dirv_album_id(al_id: i64) -> String {
+    format!("dirv-al-{al_id}")
+}
+fn parse_dirv_id(id: &str) -> Option<(String, i64)> {
+    // 返回 (kind, id)，kind ∈ ar/al
+    let rest = id.strip_prefix("dirv-")?;
+    let (kind, n) = rest.split_once('-')?;
+    Some((kind.to_string(), n.parse().ok()?))
+}
+
+/// 歌手虚拟目录 -> 该歌手下的专辑虚拟目录（含无专辑归属的散歌）。
+async fn virtual_artist(st: &AppState, aid: i64) -> Result<Vec<Value>, sqlx::Error> {
+    let albums = sqlx::query(
+        "SELECT DISTINCT al.id, al.name FROM albums al
+         JOIN tracks t ON t.album_id = al.id WHERE t.artist_id = ? ORDER BY al.name COLLATE NOCASE",
+    )
+    .bind(aid)
+    .fetch_all(&st.pool)
+    .await?;
+    let mut children: Vec<Value> = albums
+        .iter()
+        .map(|r| {
+            json!({
+                "id": dirv_album_id(r.get::<i64, _>("id")),
+                "parent": dirv_artist_id(aid),
+                "isDir": true,
+                "title": r.get::<String, _>("name"),
+            })
+        })
+        .collect();
+    // 该歌手无专辑归属的散歌
+    let strays = sqlx::query(&format!(
+        "{SONG_SQL} WHERE t.artist_id = ? AND t.album_id IS NULL ORDER BY t.title"
+    ))
+    .bind(aid)
+    .fetch_all(&st.pool)
+    .await?;
+    children.extend(strays.iter().map(song_json));
+    Ok(children)
+}
+
+/// 专辑虚拟目录 -> 该专辑的歌曲。
+async fn virtual_album(st: &AppState, al_id: i64) -> Result<Vec<Value>, sqlx::Error> {
+    let rows = sqlx::query(&format!(
+        "{SONG_SQL} WHERE t.album_id = ? ORDER BY t.track_no, t.title"
+    ))
+    .bind(al_id)
+    .fetch_all(&st.pool)
+    .await?;
+    Ok(rows.iter().map(song_json).collect())
+}
+
 pub async fn get_indexes(
     State(st): State<AppState>,
     _auth: SubsonicAuth,
@@ -121,6 +179,45 @@ pub async fn get_indexes(
         Ok(s) => s,
         Err(e) => return error(0, &e.to_string()),
     };
+
+    let last_modified: Option<i64> = sqlx::query("SELECT MAX(mtime) FROM tracks WHERE folder = ?")
+        .bind(folder)
+        .fetch_one(&st.pool)
+        .await
+        .ok()
+        .and_then(|r| r.get::<Option<i64>, _>(0));
+    let lm = last_modified.unwrap_or(0) * 1000;
+
+    // 扁平库（无物理子目录）：按艺术家/专辑生成虚拟目录树，让文件视图可浏览
+    if dirs.is_empty() {
+        let artists = sqlx::query(
+            "SELECT ar.id, ar.name, COUNT(DISTINCT t.album_id) AS album_count
+             FROM artists ar JOIN tracks t ON t.artist_id = ar.id
+             WHERE t.folder = ? GROUP BY ar.id ORDER BY ar.name COLLATE NOCASE",
+        )
+        .bind(folder)
+        .fetch_all(&st.pool)
+        .await
+        .unwrap_or_default();
+        let mut groups: BTreeMap<String, Vec<Value>> = BTreeMap::new();
+        for r in &artists {
+            let aid: i64 = r.get("id");
+            let name: String = r.get("name");
+            groups.entry(first_letter(&name)).or_default().push(json!({
+                "id": dirv_artist_id(aid),
+                "name": name,
+                "albumCount": r.get::<i64, _>("album_count"),
+            }));
+        }
+        let index: Vec<Value> = groups
+            .into_iter()
+            .map(|(name, artist)| json!({ "name": name, "artist": artist }))
+            .collect();
+        return ok(json!({
+            "indexes": {"lastModified": lm, "ignoredArticles": "The El La Los Las Le Les", "index": index, "child": root_songs}
+        }))
+        .into_response();
+    }
 
     let mut groups: BTreeMap<String, Vec<Value>> = BTreeMap::new();
     for d in &dirs {
@@ -160,6 +257,59 @@ pub async fn get_music_directory(
     let Some(id) = q.get("id") else {
         return error(10, "missing id");
     };
+
+    // 虚拟目录：dirv-ar-{aid} / dirv-al-{aid}
+    if let Some((kind, nid)) = parse_dirv_id(id) {
+        let (children, name, parent) = match kind.as_str() {
+            "ar" => {
+                let name = sqlx::query("SELECT name FROM artists WHERE id = ?")
+                    .bind(nid)
+                    .fetch_optional(&st.pool)
+                    .await
+                    .ok()
+                    .flatten()
+                    .map(|r| r.get::<String, _>("name"))
+                    .unwrap_or_default();
+                let children = match virtual_artist(&st, nid).await {
+                    Ok(c) => c,
+                    Err(e) => return error(0, &e.to_string()),
+                };
+                (children, name, Some(dirv_artist_id(nid)))
+            }
+            "al" => {
+                let name = sqlx::query(
+                    "SELECT al.name, ar.name AS artist_name FROM albums al
+                     LEFT JOIN artists ar ON ar.id = al.artist_id WHERE al.id = ?",
+                )
+                .bind(nid)
+                .fetch_optional(&st.pool)
+                .await
+                .ok()
+                .flatten()
+                .map(|r| r.get::<String, _>("name"))
+                .unwrap_or_default();
+                let artist_id = sqlx::query("SELECT artist_id FROM albums WHERE id = ?")
+                    .bind(nid)
+                    .fetch_optional(&st.pool)
+                    .await
+                    .ok()
+                    .flatten()
+                    .map(|r| r.get::<i64, _>("artist_id"));
+                let children = match virtual_album(&st, nid).await {
+                    Ok(c) => c,
+                    Err(e) => return error(0, &e.to_string()),
+                };
+                (children, name, artist_id.map(dirv_artist_id))
+            }
+            _ => return error(10, "invalid directory id"),
+        };
+        let mut directory = json!({"id": id, "name": name, "child": children});
+        if let Some(p) = parent {
+            directory.as_object_mut().unwrap().insert("parent".into(), json!(p));
+        }
+        return ok(json!({ "directory": directory })).into_response();
+    }
+
     let Some((folder, prefix)) = parse_dir_id(id) else {
         return error(10, "invalid directory id");
     };
