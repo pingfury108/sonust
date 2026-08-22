@@ -55,6 +55,7 @@ pub fn router(state: AppState) -> Router {
     rest = r(rest, "/getArtists", get(browsing::get_artists));
     rest = r(rest, "/getArtist", get(browsing::get_artist));
     rest = r(rest, "/getAlbum", get(browsing::get_album));
+    rest = r(rest, "/getSong", get(browsing::get_song));
     rest = r(rest, "/getIndexes", get(directory::get_indexes));
     rest = r(rest, "/getMusicDirectory", get(directory::get_music_directory));
     rest = r(rest, "/getGenres", get(lists::get_genres));

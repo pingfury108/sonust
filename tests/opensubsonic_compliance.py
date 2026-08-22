@@ -201,6 +201,11 @@ def main():
                 check_fields(s, CHILD_REQUIRED, f"Child({s.get('title')})", errors)
             report("Child schema (getAlbum)", PASS if not errors else FAIL, "; ".join(errors[:3]))
             song_id = songs[0]["id"] if songs else None
+            if song_id:
+                p2 = Client.payload(c.get("getSong", {"id": song_id})[2])
+                report("getSong 单曲详情",
+                       PASS if p2.get("song", {}).get("id") == song_id else FAIL,
+                       p2.get("song", {}).get("title", ""))
     else:
         report("getAlbum", SKIP, "无专辑")
 

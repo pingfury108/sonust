@@ -9,7 +9,7 @@ use sqlx::Row;
 
 use crate::auth::SubsonicAuth;
 use crate::subsonic::response::{error, ok};
-use crate::subsonic::{album_id, artist_id, parse_album_id, parse_artist_id, track_id};
+use crate::subsonic::{album_id, artist_id, parse_album_id, parse_artist_id, parse_track_id, track_id};
 use crate::AppState;
 
 /// 带 join 的曲目查询基础 SQL。
@@ -254,6 +254,25 @@ pub async fn get_artist(
         }
     }))
     .into_response()
+}
+
+pub async fn get_song(
+    State(st): State<AppState>,
+    _auth: SubsonicAuth,
+    Query(q): Query<HashMap<String, String>>,
+) -> Response {
+    let Some(id) = q.get("id").and_then(|s| parse_track_id(s)) else {
+        return error(10, "missing or invalid id");
+    };
+    let songs = sqlx::query(&format!("{SONG_SQL} WHERE t.id = ?"))
+        .bind(id)
+        .fetch_all(&st.pool)
+        .await
+        .unwrap_or_default();
+    match songs.first() {
+        Some(r) => ok(json!({ "song": song_json(r) })).into_response(),
+        None => error(70, "song not found"),
+    }
 }
 
 pub async fn get_album(

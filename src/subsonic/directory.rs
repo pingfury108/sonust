@@ -23,8 +23,16 @@ fn parse_dir_id(id: &str) -> Option<(i64, String)> {
     Some((folder.parse().ok()?, path.to_string()))
 }
 
+pub(crate) fn parse_dir_id_pub(id: &str) -> Option<(i64, String)> {
+    parse_dir_id(id)
+}
+
 fn like_escape(s: &str) -> String {
     s.replace('\\', "\\\\").replace('%', "\\%").replace('_', "\\_")
+}
+
+pub(crate) fn like_escape_pub(s: &str) -> String {
+    like_escape(s)
 }
 
 fn first_letter(name: &str) -> String {
