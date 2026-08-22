@@ -51,6 +51,8 @@ pub fn router(state: AppState) -> Router {
     rest = r(rest, "/ping", get(system::ping));
     rest = r(rest, "/getLicense", get(system::get_license));
     rest = r(rest, "/getOpenSubsonicExtensions", get(system::get_extensions));
+    rest = r(rest, "/startScan", get(system::start_scan));
+    rest = r(rest, "/getScanStatus", get(system::get_scan_status));
     rest = r(rest, "/getMusicFolders", get(browsing::get_music_folders));
     rest = r(rest, "/getArtists", get(browsing::get_artists));
     rest = r(rest, "/getArtist", get(browsing::get_artist));
