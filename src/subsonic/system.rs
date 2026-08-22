@@ -35,23 +35,30 @@ pub async fn get_extensions(_auth: SubsonicAuth) -> Json<Value> {
 }
 
 /// 手动触发服务端重扫（Tempus 的"扫描曲库"按钮调用）。
+/// 返回同时携带 scanning（OpenSubsonic 规范）与 isScanning（Tempus 模型）。
 pub async fn start_scan(State(st): State<crate::AppState>, _auth: SubsonicAuth) -> Response {
     let pool = st.pool.clone();
     let dirs = st.cfg.music_dirs.clone();
-    tokio::spawn(async move {
-        match crate::scanner::scan_all(&pool, &dirs).await {
-            Ok(s) => info!(?s, "manual scan done"),
-            Err(e) => tracing::warn!(error = %e, "manual scan failed"),
-        }
-    });
+    let flag = st.scanning.clone();
+    let running = flag.swap(true, std::sync::atomic::Ordering::SeqCst);
+    if !running {
+        tokio::spawn(async move {
+            match crate::scanner::scan_all(&pool, &dirs).await {
+                Ok(s) => info!(?s, "manual scan done"),
+                Err(e) => tracing::warn!(error = %e, "manual scan failed"),
+            }
+            flag.store(false, std::sync::atomic::Ordering::SeqCst);
+        });
+    }
     ok(json!({
-        "scanStatus": {"scanning": true, "count": 0, "folderCount": 0, "lastScan": ""}
+        "scanStatus": {"scanning": true, "isScanning": true, "count": 0, "folderCount": 0, "lastScan": null}
     }))
     .into_response()
 }
 
 /// 扫描状态查询。
 pub async fn get_scan_status(State(st): State<crate::AppState>, _auth: SubsonicAuth) -> Response {
+    let scanning = st.scanning.load(std::sync::atomic::Ordering::SeqCst);
     let count: i64 = sqlx::query("SELECT COUNT(*) FROM tracks")
         .fetch_one(&st.pool)
         .await
@@ -64,7 +71,8 @@ pub async fn get_scan_status(State(st): State<crate::AppState>, _auth: SubsonicA
         .unwrap_or(None);
     ok(json!({
         "scanStatus": {
-            "scanning": false,
+            "scanning": scanning,
+            "isScanning": scanning,
             "count": count,
             "folderCount": st.cfg.music_dirs.len(),
             "lastScan": last_scan
