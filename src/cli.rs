@@ -43,6 +43,22 @@ struct Cli {
     #[arg(long, env = "SONUST_ALLOW_PLAINTEXT_AUTH")]
     allow_plaintext_auth: bool,
 
+    /// 启用预转码 MP3 镜像（SONUST_MIRROR=false 关闭）
+    #[arg(long, env = "SONUST_MIRROR", default_value_t = true)]
+    mirror: bool,
+
+    /// 镜像目录（默认 <data-dir>/mirror）
+    #[arg(long, env = "SONUST_MIRROR_DIR")]
+    mirror_dir: Option<PathBuf>,
+
+    /// 镜像目标码率 kbps
+    #[arg(long, env = "SONUST_MIRROR_BITRATE", default_value_t = 320)]
+    mirror_bitrate: u32,
+
+    /// ffmpeg 可执行文件路径
+    #[arg(long, env = "SONUST_FFMPEG", default_value = "ffmpeg")]
+    ffmpeg: String,
+
     /// 详细日志
     #[arg(short, long)]
     verbose: bool,
@@ -60,6 +76,26 @@ enum Command {
         #[arg(long)]
         quarantine: Option<std::path::PathBuf>,
     },
+    /// 预转码 MP3 镜像管理
+    Mirror {
+        #[command(subcommand)]
+        cmd: MirrorCmd,
+    },
+}
+
+#[derive(Subcommand)]
+enum MirrorCmd {
+    /// 增量同步：缺失转码、源变更重转、孤儿清理
+    Sync {
+        /// 无视指纹全部重转
+        #[arg(long)]
+        force: bool,
+        /// 只报告不动手
+        #[arg(long)]
+        dry_run: bool,
+    },
+    /// 查看覆盖情况
+    Status,
 }
 
 pub async fn main() -> Result<()> {
@@ -82,6 +118,8 @@ pub async fn main() -> Result<()> {
         bail!("at least one --music-dir (or SONUST_MUSIC_DIR) is required");
     }
 
+    let mirror_dir = cli.mirror_dir.unwrap_or_else(|| data_dir.join("mirror"));
+
     let cfg = Config {
         music_dirs: cli.music_dir,
         data_dir,
@@ -91,6 +129,10 @@ pub async fn main() -> Result<()> {
         password: cli.password,
         api_key: cli.api_key,
         allow_plaintext_auth: cli.allow_plaintext_auth,
+        mirror_enabled: cli.mirror,
+        mirror_dir,
+        mirror_bitrate: cli.mirror_bitrate,
+        ffmpeg: cli.ffmpeg,
     };
 
     match cli.command.unwrap_or(Command::Serve) {
@@ -100,6 +142,10 @@ pub async fn main() -> Result<()> {
             let pool = crate::db::init(&cfg.data_dir).await?;
             let stats = crate::scanner::scan_all(&pool, &cfg.music_dirs).await?;
             println!("scan finished: {stats:?}");
+            if cfg.mirror_enabled {
+                let m = crate::mirror::sync(&pool, &cfg, false, false).await?;
+                print_mirror_stats(&m, false);
+            }
             Ok(())
         }
         Command::Dupes { quarantine } => {
@@ -118,5 +164,33 @@ pub async fn main() -> Result<()> {
             }
             Ok(())
         }
+        Command::Mirror { cmd } => {
+            let pool = crate::db::init(&cfg.data_dir).await?;
+            match cmd {
+                MirrorCmd::Sync { force, dry_run } => {
+                    let m = crate::mirror::sync(&pool, &cfg, force, dry_run).await?;
+                    print_mirror_stats(&m, dry_run);
+                }
+                MirrorCmd::Status => {
+                    let m = crate::mirror::sync(&pool, &cfg, false, true).await?;
+                    print_mirror_stats(&m, true);
+                }
+            }
+            Ok(())
+        }
+    }
+}
+
+fn print_mirror_stats(m: &crate::mirror::MirrorStats, dry_run: bool) {
+    if dry_run {
+        println!(
+            "镜像状态: 曲目 {} | 值得镜像 {} | 已就绪 {} | 缺失待转 {} | 过期待重转 {} | 待清理 {} | 小文件直传 {} | 失败 {}",
+            m.total, m.eligible, m.covered, m.transcoded, m.retranscoded, m.removed, m.skipped_small, m.failed
+        );
+    } else {
+        println!(
+            "镜像同步完成: 曲目 {} | 值得镜像 {} | 已就绪 {} | 新转 {} | 重转 {} | 清理 {} | 小文件直传 {} | 失败 {}",
+            m.total, m.eligible, m.covered, m.transcoded, m.retranscoded, m.removed, m.skipped_small, m.failed
+        );
     }
 }

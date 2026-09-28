@@ -11,4 +11,9 @@ pub struct Config {
     pub password: Option<String>,
     pub api_key: Option<String>,
     pub allow_plaintext_auth: bool,
+    /// 预转码镜像：启用 + 目录 + 目标码率 + ffmpeg 路径
+    pub mirror_enabled: bool,
+    pub mirror_dir: PathBuf,
+    pub mirror_bitrate: u32,
+    pub ffmpeg: String,
 }

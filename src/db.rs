@@ -69,6 +69,12 @@ CREATE TABLE IF NOT EXISTS playlist_items (
     position    INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_playlist_items_pl ON playlist_items(playlist_id, position);
+CREATE TABLE IF NOT EXISTS mirror_files (
+    track_id  INTEGER PRIMARY KEY,
+    src_size  INTEGER NOT NULL,
+    src_mtime INTEGER NOT NULL,
+    created   TEXT NOT NULL
+);
 "#;
 
 pub async fn init(data_dir: &Path) -> Result<SqlitePool> {

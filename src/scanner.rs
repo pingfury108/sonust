@@ -240,10 +240,11 @@ pub async fn scan_all(pool: &SqlitePool, music_dirs: &[PathBuf]) -> Result<ScanS
     Ok(stats)
 }
 
-/// 监听音乐目录变化，防抖后触发增量扫描（含删除清理）。
-pub async fn watch(pool: SqlitePool, music_dirs: Vec<PathBuf>) -> Result<()> {
+/// 监听音乐目录变化，防抖后触发增量扫描（含删除清理）；库有变化时顺带补镜像。
+pub async fn watch(pool: SqlitePool, cfg: std::sync::Arc<crate::config::Config>) -> Result<()> {
     use notify::{RecursiveMode, Watcher};
 
+    let music_dirs = cfg.music_dirs.clone();
     let (tx, mut rx) = tokio::sync::mpsc::channel::<notify::Result<notify::Event>>(100);
     let mut watcher = notify::recommended_watcher(move |res| {
         let _ = tx.blocking_send(res);
@@ -272,7 +273,18 @@ pub async fn watch(pool: SqlitePool, music_dirs: Vec<PathBuf>) -> Result<()> {
             }
         }
         match scan_all(&pool, &music_dirs).await {
-            Ok(s) if s.updated > 0 || s.pruned > 0 => info!(stats = ?s, "rescan after fs change"),
+            Ok(s) if s.updated > 0 || s.pruned > 0 => {
+                info!(stats = ?s, "rescan after fs change");
+                if cfg.mirror_enabled {
+                    match crate::mirror::sync(&pool, &cfg, false, false).await {
+                        Ok(m) if m.transcoded + m.retranscoded + m.removed > 0 => {
+                            info!(transcoded = m.transcoded, retranscoded = m.retranscoded, removed = m.removed, "mirror synced")
+                        }
+                        Ok(_) => {}
+                        Err(e) => warn!(error = %e, "mirror sync failed"),
+                    }
+                }
+            }
             Ok(_) => {}
             Err(e) => warn!(error = %e, "rescan failed"),
         }

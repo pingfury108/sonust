@@ -5,6 +5,7 @@ pub mod cover;
 pub mod db;
 pub mod dupes;
 pub mod lyrics;
+pub mod mirror;
 pub mod scanner;
 pub mod subsonic;
 
@@ -40,21 +41,27 @@ pub async fn run(cfg: Config) -> Result<()> {
         api_key_hash,
     };
 
-    // 后台增量扫描
+    // 后台增量扫描，扫完自动补镜像
     let scan_pool = pool.clone();
-    let scan_dirs = cfg.music_dirs.clone();
+    let scan_cfg = state.cfg.clone();
     tokio::spawn(async move {
-        match scanner::scan_all(&scan_pool, &scan_dirs).await {
+        match scanner::scan_all(&scan_pool, &scan_cfg.music_dirs.clone()).await {
             Ok(stats) => info!(?stats, "scan finished"),
             Err(e) => tracing::error!(error = %e, "scan failed"),
+        }
+        if scan_cfg.mirror_enabled {
+            match mirror::sync(&scan_pool, scan_cfg.as_ref(), false, false).await {
+                Ok(m) => info!(covered = m.covered, transcoded = m.transcoded, retranscoded = m.retranscoded, removed = m.removed, failed = m.failed, "mirror sync finished"),
+                Err(e) => tracing::error!(error = %e, "mirror sync failed"),
+            }
         }
     });
 
     // 文件变化实时监听
     let watch_pool = pool.clone();
-    let watch_dirs = cfg.music_dirs.clone();
+    let watch_cfg = state.cfg.clone();
     tokio::spawn(async move {
-        if let Err(e) = scanner::watch(watch_pool, watch_dirs).await {
+        if let Err(e) = scanner::watch(watch_pool, watch_cfg).await {
             tracing::error!(error = %e, "watcher failed");
         }
     });

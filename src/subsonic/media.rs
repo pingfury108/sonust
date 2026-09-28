@@ -30,6 +30,12 @@ pub async fn stream(
     let Some(id) = q.get("id") else {
         return error(10, "missing id");
     };
+    // 客户端带转码参数（Tempus 默认发 format=mp3&maxBitRate=128）且镜像已生成 → 回预转码 MP3
+    if let Some(tid) = crate::subsonic::parse_track_id(id) {
+        if let Some(mp3) = crate::mirror::serve_mirror_path(&st.pool, &st.cfg, tid, &q).await {
+            return serve_file(req, mp3).await;
+        }
+    }
     match crate::cover::track_path_for(&st.pool, &st.cfg.music_dirs, id).await {
         Ok(Some(path)) => serve_file(req, path).await,
         Ok(None) => error(70, "media not found"),
